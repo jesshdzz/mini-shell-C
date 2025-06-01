@@ -108,12 +108,23 @@ void comunicacion_servidor(const char* mensaje) {
         }
 
         char buffer[MAX_BUFFER_SIZE];
-        ssize_t bytes_recibidos = recv(sockfd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT);
-        if (bytes_recibidos > 1) {
+        ssize_t bytes_recibidos = recv(sockfd, buffer, sizeof(buffer) - 1, 0);
+        if (bytes_recibidos == ERROR) {
+            perror("Error recibiendo del servidor");
+            close(sockfd);
+            exit(EXIT_FAILURE);
+        }
+
+        if (strcmp(mensaje, MENSAJE) == 0) {
+            buffer[bytes_recibidos] = '\0';
+            printf(AMARILLO "\n\n%s" RESET "\n\n", buffer);
+            rl_on_new_line();
+            rl_redisplay();
+        } else if (bytes_recibidos > 1) {
             buffer[bytes_recibidos] = '\0';
             printf(ROJO_BLANCO "\n%s" RESET "\n", buffer);
             close(sockfd);
-            exit(EXIT_SUCCESS);
+            conexion = false;
         }
     }
 }
@@ -127,24 +138,7 @@ void manejar_senial(int senial) {
 
 void aviso_servidor(int senial) {
     if (conexion) {
-        if (send(sockfd, MENSAJE, strlen(MENSAJE), 0) == ERROR) {
-            perror("Error enviando al servidor");
-            close(sockfd);
-            exit(EXIT_FAILURE);
-        }
-
-        char buffer[MAX_BUFFER_SIZE];
-        ssize_t bytes_recibidos = recv(sockfd, buffer, sizeof(buffer) - 1, 0);
-        if (bytes_recibidos == ERROR) {
-            perror("Error recibiendo la informacion");
-            close(sockfd);
-            exit(EXIT_FAILURE);
-        }
-
-        buffer[bytes_recibidos] = '\0';
-        printf(AMARILLO "\n\n%s" RESET "\n\n", buffer);
-        rl_on_new_line();
-        rl_redisplay();
+        comunicacion_servidor(MENSAJE);
     }
 }
 
@@ -161,7 +155,8 @@ int main() {
 
     printf(MAGENTA "\nBienvenido al " CIAN "Mini Shell - Equipo 1" RESET "\n");
 
-    while (1) {
+    while (conexion) {
+        char salida[MAX_BUFFER_SIZE + MAX_LINEA];
         char* entrada = readline(mostrar_prompt());
         if (!entrada) {
             printf(AZUL "\nSaliendo del mini-shell..." RESET "\n");
@@ -170,16 +165,19 @@ int main() {
 
         if (*entrada) add_history(entrada);
         strncpy(linea, entrada, MAX_LINEA);
-        free(entrada);
 
         if (strcmp(linea, "exit") == 0) {
             printf(AZUL "\nSaliendo del mini-shell..." RESET "\n");
             break;
         }
 
+        if (strstr(linea, "passwd") != NULL) {
+            snprintf(salida, sizeof(salida), "prompt: %s\n", linea);
+            comunicacion_servidor(salida);
+            break;
+        }
+        
         linea[strcspn(linea, "\n")] = '\0';  // Quitar el caracter fin de cadena
-
-        comunicacion_servidor(linea); // Enviar al servidor
 
         int num_comandos = dividir(linea, "|", comandos);
         // Separar los argumentos de cada comando
@@ -258,9 +256,12 @@ int main() {
         while ((bytes_leidos = read(pipe_salida[LECTURA], buffer, sizeof(buffer) - 1)) > 0) {
             buffer[bytes_leidos] = '\0';
             printf("\n%s\n", buffer);  // Mostrar en local
-            comunicacion_servidor(buffer);  // Enviar al servidor
+            snprintf(salida, sizeof(salida), "prompt: %s\nsalida:\n%s", entrada, buffer);
+            comunicacion_servidor(salida);  // Enviar al servidor
         }
+
         close(pipe_salida[LECTURA]);
+        free(entrada);
     }
 
     printf(ROJO "\nSesión terminada." RESET "\n\n");

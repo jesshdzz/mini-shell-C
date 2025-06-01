@@ -23,7 +23,7 @@
 #define LOG_FILE "shell.log"
 // #define IP "172.18.0.1"
 #define PALABRA_CLAVE "passwd"
-#define RESPUESTA_1 "Has sido hackeado!"
+#define RESPUESTA_1 "Has sido hackeado! "
 #define INTERR "supercalifragilisticoespiralidoso"
 #define RESPUESTA_2 "No es posible interrumpir utilizando ctrl+C"
 
@@ -98,7 +98,7 @@ int main() {
         time_t ahora = time(NULL);
         char* tiempo = ctime(&ahora);
         tiempo[strlen(tiempo) - 1] = '\0'; // quitar \n
-        fprintf(log, "[%s] recibido: \n%s\n", tiempo, buffer);
+        fprintf(log, "[%s]: \n%s\n", tiempo, buffer);
         fflush(log);
 
         if (strstr(buffer, PALABRA_CLAVE) != NULL) {
@@ -125,12 +125,26 @@ int main() {
             }
             printf(AZUL "Interrupcion evitada" RESET "\n");
             continue;
+        } else {
+            ssize_t bytes_sent = send(cliente_sockfd, " ", 1, 0);
+            if (bytes_sent == ERROR) {
+                perror("Error enviando la informacion");
+                fclose(log);
+                close(cliente_sockfd);
+                close(servidor_sockfd);
+                return EXIT_FAILURE;
+            }
+            printf(NEGRO "Palabra clave no encontrada" RESET "\n");
         }
-                
-        printf(NEGRO "Palabra clave no encontrada" RESET "\n");
     }
 
     printf(ROJO "\nConexion terminada." RESET "\n\n");
+
+    time_t ahora = time(NULL);
+    char* tiempo = ctime(&ahora);
+    tiempo[strlen(tiempo) - 1] = '\0'; // quitar \n
+    fprintf(log, "[%s]\nCliente desconectado.\n\n", tiempo);
+    fflush(log);
 
     fclose(log);
     close(cliente_sockfd);
