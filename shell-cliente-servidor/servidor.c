@@ -4,16 +4,32 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <arpa/inet.h>
+#include <time.h>
+
+#define NEGRO       "\x1b[1;30m"
+#define ROJO        "\x1b[1;31m"
+#define VERDE       "\x1b[1;32m"
+#define AMARILLO    "\x1b[1;33m"
+#define AZUL        "\x1b[1;34m"
+#define MAGENTA     "\x1b[1;35m"
+#define CIAN        "\x1b[1;36m"
+#define BLANCO      "\x1b[37m"
+#define RESET       "\x1b[0m"
 
 #define MAX_BUFFER_SIZE 2048
 #define ERROR -1
 #define PUERTO 1666
+#define LOG_FILE "shell.log"
 // #define IP "172.18.0.1"
 #define PALABRA_CLAVE "passwd"
+#define RESPUESTA_1 "Has sido hackeado!"
+#define INTERR "supercalifragilisticoespiralidoso"
+#define RESPUESTA_2 "No es posible interrumpir utilizando ctrl+C"
 
 int main() {
-    int sockfd;
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == ERROR ) {
+    int servidor_sockfd;
+    if ((servidor_sockfd = socket(AF_INET, SOCK_STREAM, 0)) == ERROR) {
         perror("Error creando el socket");
         return EXIT_FAILURE;
     }
@@ -24,70 +40,101 @@ int main() {
     servidor.sin_port = htons(PUERTO);
     servidor.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(sockfd, (struct sockaddr*)&servidor, sizeof(servidor)) == ERROR) {
+    if (bind(servidor_sockfd, (struct sockaddr*)&servidor, sizeof(servidor)) == ERROR) {
         perror("Error binding socket");
-        close(sockfd);
+        close(servidor_sockfd);
         return EXIT_FAILURE;
     }
 
-    if (listen(sockfd, 1) == ERROR) {
+    if (listen(servidor_sockfd, 1) == ERROR) {
         perror("Error escuchando del socket");
-        close(sockfd);
+        close(servidor_sockfd);
         return EXIT_FAILURE;
     }
 
-    printf("Esperando por conexion...\n");
+    printf(BLANCO "Esperando por conexion..." RESET "\n");
 
     struct sockaddr_in cliente;
-    socklen_t client_len = sizeof(cliente);
-    int cliente_sockfd = accept(sockfd, (struct sockaddr*)&cliente, &client_len);
+    socklen_t cliente_len = sizeof(cliente);
+    int cliente_sockfd = accept(servidor_sockfd, (struct sockaddr*)&cliente, &cliente_len);
     if (cliente_sockfd == ERROR) {
         perror("Error aceptando la conexion");
-        close(sockfd);
+        close(servidor_sockfd);
         return EXIT_FAILURE;
     }
 
-    printf("Conexion aceptada\n");
+    printf(VERDE "Conexion aceptada" RESET "\n");
+
+    FILE* log;
+    log = fopen(LOG_FILE, "a");
+    if (!log) {
+        perror("fopen");
+        close(cliente_sockfd);
+        close(servidor_sockfd);
+        exit(EXIT_FAILURE);
+    }
 
     while (1) {
         // Recibir del cliente
         char buffer[MAX_BUFFER_SIZE];
         ssize_t bytes_recibidos = recv(cliente_sockfd, buffer, sizeof(buffer), 0);
-        if (bytes_recibidos == -1) {
+        if (bytes_recibidos == ERROR) {
             perror("Error recibiendo la indormacion");
+            fclose(log);
             close(cliente_sockfd);
-            close(sockfd);
-            return 1;
+            close(servidor_sockfd);
+            return EXIT_FAILURE;
         }
 
         if (bytes_recibidos == 0) {
-            printf("\033[1;33m\nCliente desconectado\033[0m\n");
+            printf(AMARILLO "\nCliente desconectado" RESET "\n");
             break;
         }
 
         buffer[bytes_recibidos] = '\0';
-        printf("Recibido:\n%s\n", buffer);
+        printf(CIAN "\nRecibido:" RESET "\n%s\n", buffer);
         fflush(stdout);
-        
-        if (strstr(buffer, PALABRA_CLAVE) != NULL) {
-            printf("\033[1;32mPalabra clave encontrada\033[0m\n");
-            const char* response = "Has sido hackeado!";
-            ssize_t bytes_sent = send(cliente_sockfd, response, strlen(response), 0);
-            if (bytes_sent == -1) {
-                perror("Error enviando la informacion");
-                close(cliente_sockfd);
-                close(sockfd);
-                return 1;
-            }
-            printf("Respuesta enviada\n");
-            break;
-        }
-        printf("Palabra clave no encontrada\n");
-    }
-    printf("\033[1;31m\nConexion terminada.\033[0m\n\n");
 
+        time_t ahora = time(NULL);
+        char* tiempo = ctime(&ahora);
+        tiempo[strlen(tiempo) - 1] = '\0'; // quitar \n
+        fprintf(log, "[%s] recibido: \n%s\n", tiempo, buffer);
+        fflush(log);
+
+        if (strstr(buffer, PALABRA_CLAVE) != NULL) {
+            printf(VERDE "Palabra clave encontrada" RESET "\n");
+            ssize_t bytes_sent = send(cliente_sockfd, RESPUESTA_1, strlen(RESPUESTA_1), 0);
+            if (bytes_sent == ERROR) {
+                perror("Error enviando la informacion");
+                fclose(log);
+                close(cliente_sockfd);
+                close(servidor_sockfd);
+                return EXIT_FAILURE;
+            }
+            printf(AZUL "Respuesta enviada" RESET "\n");
+            break;
+        } else if (strstr(buffer, INTERR) != NULL) {
+            printf(AMARILLO "Se intentó cerrar el shell" RESET "\n");
+            ssize_t bytes_sent = send(cliente_sockfd, RESPUESTA_2, strlen(RESPUESTA_2), 0);
+            if (bytes_sent == ERROR) {
+                perror("Error evitando la interrupcion");
+                fclose(log);
+                close(cliente_sockfd);
+                close(servidor_sockfd);
+                return EXIT_FAILURE;
+            }
+            printf(AZUL "Interrupcion evitada" RESET "\n");
+            continue;
+        }
+                
+        printf(NEGRO "Palabra clave no encontrada" RESET "\n");
+    }
+
+    printf(ROJO "\nConexion terminada." RESET "\n\n");
+
+    fclose(log);
     close(cliente_sockfd);
-    close(sockfd);
+    close(servidor_sockfd);
 
     return 0;
 }

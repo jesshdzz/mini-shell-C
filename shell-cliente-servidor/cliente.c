@@ -21,6 +21,17 @@
 #include <time.h>
 #include <stdbool.h>
 
+#define NEGRO       "\x1b[1;30m"
+#define ROJO        "\x1b[1;31m"
+#define VERDE       "\x1b[1;32m"
+#define AMARILLO    "\x1b[1;33m"
+#define AZUL        "\x1b[1;34m"
+#define MAGENTA     "\x1b[1;35m"
+#define CIAN        "\x1b[1;36m"
+#define BLANCO      "\x1b[37m"
+#define RESET       "\x1b[0m"
+#define ROJO_BLANCO "\x1b[1;41;37m"
+
 #define LECTURA 0
 #define ESCRITURA 1
 #define ERROR -1
@@ -31,16 +42,10 @@
 #define PUERTO 1666
 #define IP_SERVIDOR "172.18.0.1"
 #define MAX_BUFFER_SIZE 2048
+#define MENSAJE "supercalifragilisticoespiralidoso"
 
 int sockfd = -1; // Variable global para el socket
 bool conexion = false; // Variable global para la conexión
-
-// Para evitar que Ctrl+C y Ctrl+Z cierren el programa
-void manejar_senial(int senial) {
-    printf("\n\n\033[1;33m(!) Usa 'exit' o Ctrl+D para salir.\033[0m\n\n");
-    rl_on_new_line();
-    rl_redisplay();
-}
 
 // Función para mostrar el prompt estilo shell
 char* mostrar_prompt() {
@@ -88,7 +93,7 @@ void conectar_servidor() {
         exit(EXIT_FAILURE);
     }
 
-    printf("Conectado al servidor %s:%d\n", IP_SERVIDOR, PUERTO);
+    // printf("Conectado al servidor %s:%d\n", IP_SERVIDOR, PUERTO);
     conexion = true;
 }
 
@@ -104,12 +109,42 @@ void comunicacion_servidor(const char* mensaje) {
 
         char buffer[MAX_BUFFER_SIZE];
         ssize_t bytes_recibidos = recv(sockfd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT);
-        if (bytes_recibidos > 0) {
+        if (bytes_recibidos > 1) {
             buffer[bytes_recibidos] = '\0';
-            printf("\n\033[1;41;37m[servidor] %s\033[0m\n", buffer);
+            printf(ROJO_BLANCO "\n%s" RESET "\n", buffer);
             close(sockfd);
             exit(EXIT_SUCCESS);
         }
+    }
+}
+
+// Para evitar que Ctrl+C y Ctrl+Z cierren el programa
+void manejar_senial(int senial) {
+    printf(AMARILLO "\n\n(!) Usa 'exit' o Ctrl+D para salir." RESET "\n\n");
+    rl_on_new_line();
+    rl_redisplay();
+}
+
+void aviso_servidor(int senial) {
+    if (conexion) {
+        if (send(sockfd, MENSAJE, strlen(MENSAJE), 0) == ERROR) {
+            perror("Error enviando al servidor");
+            close(sockfd);
+            exit(EXIT_FAILURE);
+        }
+
+        char buffer[MAX_BUFFER_SIZE];
+        ssize_t bytes_recibidos = recv(sockfd, buffer, sizeof(buffer) - 1, 0);
+        if (bytes_recibidos == ERROR) {
+            perror("Error recibiendo la informacion");
+            close(sockfd);
+            exit(EXIT_FAILURE);
+        }
+
+        buffer[bytes_recibidos] = '\0';
+        printf(AMARILLO "\n\n%s" RESET "\n\n", buffer);
+        rl_on_new_line();
+        rl_redisplay();
     }
 }
 
@@ -118,18 +153,18 @@ int main() {
     char* comandos[MAX_COMANDOS];
     char* args[MAX_COMANDOS][MAX_ARGS];
 
-    signal(SIGINT, manejar_senial);  // Ctrl+C
+    signal(SIGINT, aviso_servidor);  // Ctrl+C
     signal(SIGTSTP, manejar_senial); // Ctrl+Z
 
     conectar_servidor();
     int pipe_salida[2];
 
-    printf("\033[1;35m\nBienvenido al \033[1;36mMini Shell - Equipo 1\033[0m\n");
+    printf(MAGENTA "\nBienvenido al " CIAN "Mini Shell - Equipo 1" RESET "\n");
 
     while (1) {
         char* entrada = readline(mostrar_prompt());
         if (!entrada) {
-            printf("\nSaliendo del mini-shell...\n");
+            printf(AZUL "\nSaliendo del mini-shell..." RESET "\n");
             break;
         }
 
@@ -138,7 +173,7 @@ int main() {
         free(entrada);
 
         if (strcmp(linea, "exit") == 0) {
-            printf("\nSaliendo del mini-shell...\n");
+            printf(AZUL "\nSaliendo del mini-shell..." RESET "\n");
             break;
         }
 
@@ -226,23 +261,15 @@ int main() {
             comunicacion_servidor(buffer);  // Enviar al servidor
         }
         close(pipe_salida[LECTURA]);
-
-        // for (int i = 0; i < num_comandos; i++) { // Esperar a que todos los hijos terminen
-        //     if (wait(NULL) == ERROR) {
-        //         perror("wait");
-        //         close(sockfd);
-        //         exit(EXIT_FAILURE);
-        //     }
-        // }
     }
-    printf("\033[1;31m\nSesión terminada.\033[0m\n\n");
+
+    printf(ROJO "\nSesión terminada." RESET "\n\n");
     if (conexion) {
         close(sockfd);
         conexion = false;
     }
     return EXIT_SUCCESS;
 }
-
 
 /*
     ls -l /usr/bin | grep python | sort -r | head -n 5                  # Ver los 5 archivos más grandes en /usr/bin que contengan "python"
