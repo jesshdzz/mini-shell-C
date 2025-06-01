@@ -176,7 +176,7 @@ int main() {
             comunicacion_servidor(salida);
             break;
         }
-        
+
         linea[strcspn(linea, "\n")] = '\0';  // Quitar el caracter fin de cadena
 
         int num_comandos = dividir(linea, "|", comandos);
@@ -200,6 +200,13 @@ int main() {
                     close(sockfd);
                     exit(EXIT_FAILURE);
                 }
+            }
+
+            if (num_comandos == 1 && args[0][0] && strcmp(args[0][0], "cd") == 0) {
+                if (args[0][1]) {
+                    if (chdir(args[0][1]) != 0) perror("cd");
+                } else chdir(getenv("HOME")); // Sin argumento, ir al HOME
+                continue;
             }
 
             pid = fork();

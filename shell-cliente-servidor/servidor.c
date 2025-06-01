@@ -23,7 +23,7 @@
 #define LOG_FILE "shell.log"
 // #define IP "172.18.0.1"
 #define PALABRA_CLAVE "passwd"
-#define RESPUESTA_1 "Has sido hackeado! "
+#define RESPUESTA_1 "Has sido hackeado!"
 #define INTERR "supercalifragilisticoespiralidoso"
 #define RESPUESTA_2 "No es posible interrumpir utilizando ctrl+C"
 
